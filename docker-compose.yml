@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  database:
+    image: postgres:15-alpine
+    container_name: congresos-db
+    environment:
+      POSTGRES_DB: congresos_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - congresos-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d congresos_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Principal
+  backend-principal:
+    build:
+      context: ./backend-principal
+      dockerfile: Dockerfile
+    container_name: backend-principal
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/congresos_db
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: admin123
+      MS_VERIFICADOR_URL: http://ms-verificador-adapter:8082
+    depends_on:
+      database:
+        condition: service_healthy
+      ms-verificador-adapter:
+        condition: service_started
+    networks:
+      - congresos-network
+    restart: unless-stopped
+
+  # Microservicio Ticket Authority (Servicio Externo)
+  ms-ticket-authority:
+    build:
+      context: ./ms-ticket-authority
+      dockerfile: Dockerfile
+    container_name: ms-ticket-authority
+    ports:
+      - "8081:8081"
+    environment:
+      SERVER_PORT: 8081
+    networks:
+      - congresos-network
+    restart: unless-stopped
+
+  # Microservicio Verificador Adapter
+  ms-verificador-adapter:
+    build:
+      context: ./ms-verificador-adapter
+      dockerfile: Dockerfile
+    container_name: ms-verificador-adapter
+    ports:
+      - "8082:8082"
+    environment:
+      SERVER_PORT: 8082
+      TICKET_AUTHORITY_URL: http://ms-ticket-authority:8081
+    depends_on:
+      - ms-ticket-authority
+    networks:
+      - congresos-network
+    restart: unless-stopped
+
+  # Frontend Vue.js
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend-congresos
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8080
+    depends_on:
+      - backend-principal
+    networks:
+      - congresos-network
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  congresos-network:
+    driver: bridge

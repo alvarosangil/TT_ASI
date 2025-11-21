@@ -1,0 +1,21 @@
+package com.congresos.ticketauthority.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+/**
+ * DTO para respuesta de verificación de ticket
+ */
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class VerifyTicketResponse {
+    private String status; // VALID, ALREADY_USED, TAMPERED, EXPIRED
+    private String ticketId;
+    private Boolean usedNow;
+    private String verificationId;
+    private LocalDateTime lastUseAt;
+}
