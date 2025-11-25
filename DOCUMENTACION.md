@@ -341,11 +341,13 @@ public class BackendPrincipalApplication {
 |-------|------|-------------|
 | `idInscripcion` | Long | ID autoincremental |
 | `asistente` | Usuario | El usuario inscrito |
-| `congreso` | Usuario | El congreso (¡Nota: debería ser Congreso!) |
+| `congreso` | Congreso | El congreso de la inscripción |
 | `estado` | EstadoInscripcion | PENDIENTE, CONFIRMADA, CANCELADA |
 | `pago` | Pago | Relación OneToOne |
 | `ticketQR` | String | Código QR generado |
 | `ticketId` | String | ID del ticket externo |
+
+> ⚠️ **Nota técnica:** En el código fuente actual (`InscripcionCongreso.java`), el campo `congreso` está incorrectamente tipado como `Usuario` en lugar de `Congreso`. Esta documentación refleja el tipo correcto esperado.
 
 **Enum EstadoInscripcion:**
 - `PENDIENTE`: Esperando pago
