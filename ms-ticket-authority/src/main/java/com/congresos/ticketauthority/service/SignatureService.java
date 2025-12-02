@@ -2,7 +2,6 @@ package com.congresos.ticketauthority.service;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,10 +32,10 @@ public class SignatureService {
         claims.put("eventId", eventId);
 
         return Jwts.builder()
-                .setClaims(claims)
-                .setIssuedAt(new Date())
-                .setExpiration(Date.from(expirationTime.atZone(ZoneId.systemDefault()).toInstant()))
-                .signWith(getSignKey(), SignatureAlgorithm.HS256)
+                .claims(claims)
+                .issuedAt(new Date())
+                .expiration(Date.from(expirationTime.atZone(ZoneId.systemDefault()).toInstant()))
+                .signWith(getSignKey())
                 .compact();
     }
 
@@ -45,10 +44,10 @@ public class SignatureService {
      */
     public boolean isSignatureValid(String signature) {
         try {
-            Jwts.parserBuilder()
-                    .setSigningKey(getSignKey())
+            Jwts.parser()
+                    .verifyWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(secretKey)))
                     .build()
-                    .parseClaimsJws(signature);
+                    .parseSignedClaims(signature);
             return true;
         } catch (Exception e) {
             return false;
@@ -59,11 +58,11 @@ public class SignatureService {
      * Extrae el ticketId de la firma
      */
     public String extractTicketId(String signature) {
-        Claims claims = Jwts.parserBuilder()
-                .setSigningKey(getSignKey())
+        Claims claims = Jwts.parser()
+                .verifyWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(secretKey)))
                 .build()
-                .parseClaimsJws(signature)
-                .getBody();
+                .parseSignedClaims(signature)
+                .getPayload();
         return claims.get("ticketId", String.class);
     }
 
