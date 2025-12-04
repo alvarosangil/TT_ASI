@@ -718,59 +718,236 @@ inscripcionRepository.save(inscripcion)
 
 ### **MS Ticket Authority** (Puerto 8081)
 
-**Función**: Servicio externo para generar y validar tickets QR con firma criptográfica
+**Función**: Es el servicio AUTORIDAD de tickets - el único que puede emitir y validar tickets de forma definitiva
 
-**Características**:
-- Genera códigos QR firmados criptográficamente (JWT)
-- Valida tickets sin acceso a base de datos
-- Simula un servicio de terceros (como Ticketmaster)
+**Responsabilidades principales**:
 
-**Endpoints típicos**:
+1. **Emisión de tickets QR** (`POST /api/v1/tickets`)
+   - Genera un ID único de ticket (formato: `TCK-XXXXXXXX`)
+   - Crea una **firma criptográfica** para evitar falsificaciones
+   - Guarda el ticket en su almacén (en memoria actualmente)
+   - Devuelve: QR payload (Base64) + signature
+
+2. **Verificación de tickets** (`POST /api/v1/tickets/verify`)
+   - Valida la firma criptográfica (detecta tickets falsos/manipulados)
+   - Verifica fechas: no caducado, ya válido
+   - Verifica que no haya sido usado previamente
+   - Marca el ticket como "usado" una vez escaneado
+   - Devuelve estados: `VALID`, `TAMPERED`, `EXPIRED`, `NOT_YET_VALID`, `ALREADY_USED`
+
+3. **Consulta de estado** (`GET /api/v1/tickets/{ticketId}/status`)
+   - Consulta información del ticket
+   - Devuelve: estado, fecha primer uso, número de usos
+
+**Modelo de datos Ticket**:
+```java
+class Ticket {
+    String ticketId;           // TCK-XXXXXXXX
+    String eventId;            // ID del evento
+    String holderName;         // Nombre del titular
+    String holderDoc;          // Documento del titular
+    LocalDateTime validFrom;   // Válido desde
+    LocalDateTime validTo;     // Válido hasta
+    String signature;          // Firma criptográfica
+    List<Usage> usages;        // Registro de escaneos
+    LocalDateTime createdAt;   // Fecha de creación
+}
 ```
-POST /api/tickets/generar
-  Body: { userId, eventId, eventType }
-  Response: { ticketId, qrCode, signature }
 
-POST /api/tickets/verificar
-  Body: { ticketId, qrCode }
-  Response: { valid: true/false, message: "..." }
+**Seguridad**:
+```properties
+ticket.signature.secret=CLAVE_SECRETA_PARA_FIRMAR_TICKETS_QR_MUY_SEGURA_2025
 ```
+- Usa esta clave para generar firmas HMAC
+- Solo Ticket Authority conoce esta clave
+- Imposible falsificar tickets sin la clave
 
 **Tecnología**:
 - Spring Boot 3.5.0
-- JWT para firmar tickets
-- No usa base de datos (stateless)
+- Almacenamiento: `ConcurrentHashMap` (en memoria)
+- SignatureService: Genera/valida firmas criptográficas
+- No usa base de datos (stateless para alto rendimiento)
 
 ---
 
 ### **MS Verificador Adapter** (Puerto 8082)
 
-**Función**: Adaptador entre Backend Principal y Ticket Authority
+**Función**: Adaptador/Proxy entre el Backend Principal y el Ticket Authority
 
-**¿Por qué existe?**
-- **Patrón Adapter**: Encapsula la comunicación con servicio externo
-- Si cambia Ticket Authority, solo se modifica este adaptador
-- Backend Principal no conoce detalles de Ticket Authority
+**¿Por qué existe este microservicio separado?**
 
-**Endpoints típicos**:
+1. **Patrón de diseño: Adapter Pattern**
+   - El Backend Principal NO llama directamente al Ticket Authority
+   - El Verificador actúa como intermediario inteligente
+   - Abstrae la complejidad de comunicación con servicios externos
+
+2. **Funcionalidades que añade**:
+
+   **a) Reintentos automáticos**:
+   ```java
+   return ticketAuthorityClient.verifyTicket(request)
+       .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
+   ```
+   - Si Ticket Authority falla temporalmente, reintenta 3 veces
+   - Backoff exponencial: 1s, 2s, 4s
+   - Aumenta la resiliencia del sistema
+
+   **b) Logging y auditoría**:
+   ```java
+   .doOnSuccess(response -> 
+       log.info("Verificación completada - Status: {}, TicketId: {}", 
+                response.getStatus(), response.getTicketId()))
+   .doOnError(error -> 
+       log.error("Error en verificación: {}", error.getMessage()))
+   ```
+   - Registra todas las verificaciones
+   - Facilita debugging y auditoría
+   - Cumplimiento normativo (trazabilidad)
+
+   **c) Resiliencia**:
+   - Usa **WebFlux reactivo** (Mono) para operaciones no bloqueantes
+   - Preparado para implementar Circuit Breaker
+   - Manejo elegante de fallos
+
+   **d) Caché** (preparado para implementar):
+   - Podría cachear respuestas de tickets ya verificados
+   - Reduce carga en Ticket Authority
+   - Mejora tiempos de respuesta
+
+**Endpoints expuestos**:
 ```
-POST /api/verificador/generar-ticket
-POST /api/verificador/validar-ticket
+POST /api/verificador/verifyTicket
+  Body: { qrPayload, signature, gateId }
+  Response: { status, ticketId, allowed, verificationId, ... }
+
+GET /api/verificador/health
+  Response: "MS Verificador Adapter is running"
 ```
 
-**Funcionamiento**:
-```
-Backend Principal → MS Verificador → MS Ticket Authority
-                    ↓
-                Traduce/Adapta
-                    ↓
-                Devuelve resultado
+**Configuración**:
+```properties
+ticket.authority.url=http://localhost:8081
 ```
 
 **Tecnología**:
 - Spring Boot 3.5.0
+- WebFlux (programación reactiva con Mono)
 - WebClient (cliente HTTP reactivo)
-- Conecta con Ticket Authority vía HTTP
+- Retry backoff strategy
+
+---
+
+### 🔄 **Flujo completo de verificación de un ticket QR**
+
+#### Diagrama de secuencia:
+```
+1. Staff escanea QR en la app móvil/web
+        ↓
+2. Frontend envía solicitud al Backend Principal
+   POST http://localhost:8080/api/acceso/verificar
+   Body: { qrPayload: "base64...", signature: "hmac...", gateId: "GATE-001" }
+        ↓
+3. Backend Principal → MS-Verificador-Adapter
+   POST http://localhost:8082/api/verificador/verifyTicket
+   Body: { qrPayload, signature, gateId }
+        ↓
+4. MS-Verificador-Adapter → MS-Ticket-Authority
+   POST http://localhost:8081/api/v1/tickets/verify
+   Body: { qrPayload, signature, gateId }
+   
+   [Si falla, reintenta 3 veces con backoff: 1s, 2s, 4s]
+        ↓
+5. MS-Ticket-Authority valida el ticket:
+   ✓ Verifica firma criptográfica (HMAC-SHA256)
+   ✓ Extrae ticketId del payload
+   ✓ Busca ticket en almacén
+   ✓ Verifica fechas: validFrom <= ahora <= validTo
+   ✓ Verifica que NO haya sido usado antes
+   ✓ Marca como USADO y registra: { gateId, verificationId, timestamp }
+        ↓
+6. Responde con uno de estos estados:
+   - VALID: ✅ Ticket válido, acceso permitido
+   - TAMPERED: ❌ Firma inválida o ticket no existe
+   - EXPIRED: ⏰ Ticket caducado
+   - NOT_YET_VALID: 🕐 Ticket aún no válido
+   - ALREADY_USED: ♻️ Ticket ya usado anteriormente
+        ↓
+7. MS-Verificador-Adapter recibe respuesta
+   - Logging: "Verificación completada - Status: VALID, TicketId: TCK-ABC12345"
+        ↓
+8. Backend Principal recibe respuesta
+   - Guarda en BD: RegistroAcceso { usuario, ticket, sesion, gate, timestamp }
+        ↓
+9. Frontend muestra resultado al Staff:
+   - ✅ "Acceso permitido - Bienvenido Juan Pérez"
+   - ❌ "Ticket inválido - Contacte con organización"
+```
+
+#### ¿Por qué DOS microservicios en lugar de UNO?
+
+**Ventajas de la arquitectura de 2 microservicios:**
+
+1. **Separación de responsabilidades (SRP)**:
+   - **Ticket Authority**: SOLO lógica de negocio de tickets (core domain)
+   - **Verificador Adapter**: SOLO infraestructura (comunicación, reintentos, caché)
+
+2. **Escalabilidad independiente**:
+   - Ticket Authority puede escalar horizontalmente según carga
+   - Verificador puede tener múltiples instancias sin duplicar lógica
+
+3. **Seguridad mejorada**:
+   - La clave secreta de firma SOLO está en Ticket Authority
+   - Verificador NO puede falsificar tickets
+   - Backend Principal ni siquiera conoce la clave
+
+4. **Resiliencia del sistema**:
+   - Si Ticket Authority falla temporalmente → Verificador reintenta
+   - Puedes añadir Circuit Breaker para evitar cascading failures
+   - Desacopla fallo de un servicio del otro
+
+5. **Flexibilidad de evolución**:
+   - Cambiar Ticket Authority → Solo modificas Verificador
+   - Añadir caché → Solo en Verificador
+   - Nuevos adaptadores (móvil, kioscos) → Reutilizan Ticket Authority
+   - Migrar a servicio real (Ticketmaster) → Solo cambias Verificador
+
+6. **Testing más sencillo**:
+   - Puedes mockear Ticket Authority en tests del Verificador
+   - Puedes testear Ticket Authority sin HTTP (testing unitario)
+
+#### Configuración de servicios:
+
+**docker-compose.yml**:
+```yaml
+services:
+  backend-principal:
+    ports: ["8080:8080"]
+    environment:
+      - ms.verificador.url=http://ms-verificador-adapter:8082
+  
+  ms-verificador-adapter:
+    ports: ["8082:8082"]
+    environment:
+      - ticket.authority.url=http://ms-ticket-authority:8081
+  
+  ms-ticket-authority:
+    ports: ["8081:8081"]
+    environment:
+      - ticket.signature.secret=CLAVE_SECRETA_...
+```
+
+#### Estados de respuesta del sistema:
+
+| Estado | Código HTTP | Significado | Acción del Frontend |
+|--------|-------------|-------------|---------------------|
+| `VALID` | 200 | Ticket válido | ✅ Permitir acceso |
+| `TAMPERED` | 200 | Firma inválida | ❌ Denegar + Alertar seguridad |
+| `EXPIRED` | 200 | Caducado | ❌ Denegar + Mostrar "Ticket expirado" |
+| `NOT_YET_VALID` | 200 | Aún no válido | ❌ Denegar + Mostrar fecha inicio |
+| `ALREADY_USED` | 200 | Ya usado | ❌ Denegar + Mostrar fecha/hora uso |
+| Error 500 | 500 | Error del servidor | ⚠️ Mostrar "Error temporal, reintente" |
+
+**Nota**: Todos devuelven 200 porque son respuestas válidas del servicio. El estado de negocio va en el campo `status` del JSON.
 
 ---
 
