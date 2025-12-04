@@ -995,15 +995,74 @@ public class GlobalExceptionHandler {
 4. Devuelve datos para gráficas
 
 ### CU23: Crear Congreso (Organizador)
-**Flujo**:
-1. Organizador rellena formulario
-2. Frontend envía POST /api/congresos
-3. Backend verifica rol ORGANIZADOR
-4. Valida fechas, precio, etc.
-5. Crea Congreso
-6. Asocia organizador
-7. Devuelve congreso creado
-8. Organizador puede añadir sesiones
+**Descripción**: Permite al organizador crear un nuevo congreso con toda su información.
+
+**Flujo Completo**:
+1. **Frontend**: Organizador accede a `/organizador/crear-congreso`
+2. **Frontend**: Rellena formulario con:
+   - Nombre del congreso
+   - Descripción
+   - Fecha inicio y fin
+   - Lugar y ciudad
+   - Temática
+   - Precio (si es de pago)
+   - URL imagen portada
+3. **Frontend**: Envía POST `/api/congresos/crear` con datos validados
+4. **Backend**: `JwtAuthenticationFilter` valida token JWT
+5. **Backend**: `@PreAuthorize("hasRole('ORGANIZADOR')")` verifica rol
+6. **Backend**: `CongresoController.crearCongreso()` recibe request
+7. **Backend**: `CongresoService.crearCongreso()` ejecuta lógica:
+   - Busca organizador por email autenticado
+   - Valida que usuario sea ORGANIZADOR
+   - Valida fechas (inicio < fin, inicio >= hoy)
+   - Valida precio (> 0 si es de pago)
+   - Crea entidad `Congreso`
+   - Asocia organizador (`ManyToOne`)
+   - Guarda en base de datos
+8. **Backend**: Devuelve `CongresoDTO` con ID generado
+9. **Frontend**: Muestra mensaje de éxito
+10. **Frontend**: Redirige a `/organizador/mis-congresos`
+
+**Archivos Involucrados**:
+- `CrearCongresoView.vue` - Formulario de creación
+- `CongresoController.java` - Endpoint POST `/api/congresos/crear`
+- `CongresoService.java` - Lógica de negocio y validaciones
+- `CongresoRepository.java` - Persistencia JPA
+- `Congreso.java` - Entidad de dominio
+- `CongresoRequest.java` - DTO para request
+- `CongresoDTO.java` - DTO para response
+
+**Validaciones Implementadas**:
+- ✅ Solo usuarios con rol `ORGANIZADOR` pueden crear
+- ✅ Fecha inicio debe ser futura
+- ✅ Fecha inicio < fecha fin
+- ✅ Si es de pago, precio > 0
+- ✅ Nombre obligatorio (max 200 caracteres)
+- ✅ Lugar obligatorio (max 200 caracteres)
+
+**Seguridad**:
+```java
+@PreAuthorize("hasRole('ORGANIZADOR')")
+public ResponseEntity<CongresoDTO> crearCongreso(...)
+```
+
+---
+
+### CU24: Editar Congreso (Organizador)
+**Descripción**: Permite al organizador modificar un congreso existente que él creó.
+
+**Flujo Completo**:
+1. **Frontend**: Organizador accede a `/organizador/editar-congreso/:id`
+2. **Frontend**: Carga datos del congreso existente
+3. **Frontend**: Modifica campos necesarios
+4. **Frontend**: Envía PUT `/api/congresos/:id/editar`
+5. **Backend**: Valida que el organizador sea el propietario
+6. **Backend**: Actualiza campos del congreso
+7. **Backend**: Devuelve congreso actualizado
+
+**Restricciones de Seguridad**:
+- Solo el organizador propietario puede editar
+- Verificación: `congreso.getOrganizador().getEmail().equals(emailOrganizador)`
 
 ---
 

@@ -27,16 +27,23 @@ export const useAuthStore = defineStore('auth', () => {
   const login = async (email, password) => {
     try {
       const response = await http.post('/auth/login', { email, password })
-      const { token: authToken, usuario } = response.data
+      const data = response.data
       
-      token.value = authToken
-      user.value = usuario
+      // El backend envía los datos directamente en el response
+      token.value = data.token
+      user.value = {
+        idUsuario: data.idUsuario,
+        email: data.email,
+        nombreCompleto: data.nombreCompleto,
+        tipoUsuario: data.tipoUsuario
+      }
       
-      localStorage.setItem('token', authToken)
-      localStorage.setItem('user', JSON.stringify(usuario))
+      localStorage.setItem('token', data.token)
+      localStorage.setItem('user', JSON.stringify(user.value))
       
       return { success: true }
     } catch (error) {
+      console.error('Error en login:', error)
       return { 
         success: false, 
         message: error.response?.data?.message || 'Error al iniciar sesión' 
@@ -47,6 +54,20 @@ export const useAuthStore = defineStore('auth', () => {
   const registro = async (userData) => {
     try {
       const response = await http.post('/auth/registro', userData)
+      const data = response.data
+      
+      // Auto-login después del registro - datos vienen directamente
+      token.value = data.token
+      user.value = {
+        idUsuario: data.idUsuario,
+        email: data.email,
+        nombreCompleto: data.nombreCompleto,
+        tipoUsuario: data.tipoUsuario
+      }
+      
+      localStorage.setItem('token', data.token)
+      localStorage.setItem('user', JSON.stringify(user.value))
+      
       return { success: true, data: response.data }
     } catch (error) {
       return { 
