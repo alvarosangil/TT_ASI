@@ -58,6 +58,15 @@
 │  └────────────────────────────────┬─────────────────────────────────────────────────┘  │
 │                                   │                                                      │
 │  ┌────────────────────────────────▼─────────────────────────────────────────────────┐  │
+│  │                          <<Component>> DTOs (Data Transfer Objects)               │  │
+│  │  ┌────────────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ LoginRequest, LoginResponse, RegistroRequest                              │  │  │
+│  │  │ CongresoDTO, CongresoRequest                                              │  │  │
+│  │  │ SesionDTO, SesionRequest                                                  │  │  │
+│  │  └────────────────────────────────────────────────────────────────────────────┘  │  │
+│  └────────────────────────────────┬─────────────────────────────────────────────────┘  │
+│                                   │                                                      │
+│  ┌────────────────────────────────▼─────────────────────────────────────────────────┐  │
 │  │                          <<Component>> Services                                   │  │
 │  │  ┌────────────────────────────────────────────────────────────────────────────┐  │  │
 │  │  │ AuthService                                                                │  │  │
@@ -148,6 +157,13 @@
 │  └────────────────────────────────┬─────────────────────────────────────────────────┘  │
 │                                   │                                                      │
 │  ┌────────────────────────────────▼─────────────────────────────────────────────────┐  │
+│  │                          <<Component>> DTOs                                       │  │
+│  │  ┌────────────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ VerifyTicketRequest, VerifyTicketResponse                                 │  │  │
+│  │  └────────────────────────────────────────────────────────────────────────────┘  │  │
+│  └────────────────────────────────┬─────────────────────────────────────────────────┘  │
+│                                   │                                                      │
+│  ┌────────────────────────────────▼─────────────────────────────────────────────────┐  │
 │  │                          <<Component>> Service                                    │  │
 │  │  ┌────────────────────────────────────────────────────────────────────────────┐  │  │
 │  │  │ VerificadorAdapter                                                         │  │  │
@@ -182,6 +198,14 @@
 │  │  │   POST   /api/v1/tickets/verify       (Verificar ticket QR)               │  │  │
 │  │  │   GET    /api/v1/tickets/{id}/status  (Consultar estado)                 │  │  │
 │  │  │   GET    /api/v1/tickets/health       (Health check)                     │  │  │
+│  │  └────────────────────────────────────────────────────────────────────────────┘  │  │
+│  └────────────────────────────────┬─────────────────────────────────────────────────┘  │
+│                                   │                                                      │
+│  ┌────────────────────────────────▼─────────────────────────────────────────────────┐  │
+│  │                          <<Component>> DTOs                                       │  │
+│  │  ┌────────────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │ EmitTicketRequest, EmitTicketResponse                                     │  │  │
+│  │  │ VerifyTicketRequest, VerifyTicketResponse                                 │  │  │
 │  │  └────────────────────────────────────────────────────────────────────────────┘  │  │
 │  └────────────────────────────────┬─────────────────────────────────────────────────┘  │
 │                                   │                                                      │
@@ -250,19 +274,22 @@
 
 ### Backend Principal (Spring Boot)
 - **3 Controllers**: Auth, Congreso, Sesion (15 endpoints REST)
+- **6 DTOs**: LoginRequest/Response, RegistroRequest, CongresoDTO/Request, SesionDTO/Request
 - **3 Services**: Lógica de negocio para autenticación, congresos y sesiones
-- **7 Repositories**: Acceso a datos con Spring Data JPA
+- **7 Repositories (DAOs)**: Acceso a datos con Spring Data JPA
 - **Security**: JWT Filter, JWT Service, Security Config
 - **Database**: PostgreSQL con 7 tablas
 
 ### MS Verificador Adapter (Spring Boot)
 - **1 Controller**: Verificador (2 endpoints)
+- **2 DTOs**: VerifyTicketRequest, VerifyTicketResponse
 - **1 Service**: VerificadorAdapter con lógica de reintentos
 - **1 HTTP Client**: WebClient reactivo hacia Ticket Authority
 - **Sin BD**: Stateless, solo proxy/adaptador
 
 ### MS Ticket Authority (Spring Boot)
 - **1 Controller**: Ticket (4 endpoints)
+- **4 DTOs**: EmitTicketRequest/Response, VerifyTicketRequest/Response
 - **2 Services**: TicketService, SignatureService
 - **1 Model**: Ticket (POJO)
 - **Storage**: ConcurrentHashMap en memoria
