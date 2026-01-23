@@ -9,6 +9,10 @@ import RegistroView from '../views/RegistroView.vue'
 import MisCongresosView from '../views/MisCongresosView.vue'
 import MisSesionesView from '../views/MisSesionesView.vue'
 import PerfilView from '../views/PerfilView.vue'
+import CrearCongresoView from '../views/CrearCongresoView.vue'
+import MisCongresoOrganizadorView from '../views/MisCongresoOrganizadorView.vue'
+import GestionarSesionesView from '../views/GestionarSesionesView.vue'
+import CrearSesionView from '../views/CrearSesionView.vue'
 
 const routes = [
   {
@@ -52,6 +56,42 @@ const routes = [
     name: 'perfil',
     component: PerfilView,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/organizador/mis-congresos',
+    name: 'organizador-mis-congresos',
+    component: MisCongresoOrganizadorView,
+    meta: { requiresAuth: true, role: 'ORGANIZADOR' }
+  },
+  {
+    path: '/organizador/crear-congreso',
+    name: 'crear-congreso',
+    component: CrearCongresoView,
+    meta: { requiresAuth: true, role: 'ORGANIZADOR' }
+  },
+  {
+    path: '/organizador/editar-congreso/:id',
+    name: 'editar-congreso',
+    component: CrearCongresoView,
+    meta: { requiresAuth: true, role: 'ORGANIZADOR' }
+  },
+  {
+    path: '/organizador/congreso/:idCongreso/sesiones',
+    name: 'gestionar-sesiones',
+    component: GestionarSesionesView,
+    meta: { requiresAuth: true, role: 'ORGANIZADOR' }
+  },
+  {
+    path: '/organizador/congreso/:idCongreso/sesion/nueva',
+    name: 'crear-sesion',
+    component: CrearSesionView,
+    meta: { requiresAuth: true, role: 'ORGANIZADOR' }
+  },
+  {
+    path: '/organizador/congreso/:idCongreso/sesion/:idSesion/editar',
+    name: 'editar-sesion',
+    component: CrearSesionView,
+    meta: { requiresAuth: true, role: 'ORGANIZADOR' }
   }
 ]
 
@@ -67,6 +107,8 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next('/login')
   } else if (to.meta.guestOnly && authStore.isAuthenticated) {
+    next('/')
+  } else if (to.meta.role && authStore.user?.tipoUsuario !== to.meta.role) {
     next('/')
   } else {
     next()

@@ -32,7 +32,7 @@ public class InscripcionCongreso {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_congreso", nullable = false)
-    private Usuario congreso;
+    private Congreso congreso;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

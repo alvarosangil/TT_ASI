@@ -16,7 +16,10 @@
             <router-link v-if="isAsistente" to="/mis-sesiones" class="nav-link">
               Mis Sesiones
             </router-link>
-            <router-link v-if="isOrganizador" to="/crear-congreso" class="nav-link">
+            <router-link v-if="isOrganizador" to="/organizador/mis-congresos" class="nav-link">
+              Mis Congresos
+            </router-link>
+            <router-link v-if="isOrganizador" to="/organizador/crear-congreso" class="nav-link">
               Crear Congreso
             </router-link>
             <router-link to="/perfil" class="nav-link">Perfil</router-link>
